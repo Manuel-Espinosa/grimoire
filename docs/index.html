@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grimoire — Clipboard spells for GNOME</title>
+  <meta name="description" content="A GNOME Shell extension with clipboard history, text-transformation spells, and a local AI assistant. Runs entirely on your machine.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Spectral:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --void: #08060F;
+      --deep: #0F0B1E;
+      --arcane: #6D28D9;
+      --glow: #A78BFA;
+      --moonpaper: #EDE9FE;
+      --muted: #7C6E9A;
+      --amber: #C47C1C;
+      --amber-bright: #E08E24;
+      --ff-display: 'IM Fell English', Georgia, serif;
+      --ff-body: 'Spectral', Georgia, serif;
+      --ff-mono: 'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--void);
+      color: var(--moonpaper);
+      font-family: var(--ff-body);
+      font-size: 1.0625rem;
+      line-height: 1.75;
+      overflow-x: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.035;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    h1, h2, h3 { font-family: var(--ff-display); font-weight: normal; line-height: 1.15; }
+    h1 { font-size: clamp(3.5rem, 11vw, 7.5rem); letter-spacing: -0.01em; }
+    h2 { font-size: clamp(1.75rem, 4vw, 2.75rem); }
+    h3 { font-size: 1.25rem; }
+    code { font-family: var(--ff-mono); }
+
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.65s ease, transform 0.65s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } }
+
+    .wrap { max-width: 900px; margin: 0 auto; padding: 0 1.75rem; }
+
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 2rem;
+      background: linear-gradient(to bottom, rgba(8,6,15,0.95) 0%, transparent 100%);
+    }
+    .nav-brand { font-family: var(--ff-display); font-size: 1.15rem; color: var(--glow); text-decoration: none; letter-spacing: 0.04em; }
+    nav ul { list-style: none; display: flex; gap: 2rem; }
+    nav ul a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-family: var(--ff-body); transition: color 0.2s; }
+    nav ul a:hover { color: var(--moonpaper); }
+    @media (max-width: 600px) { nav ul { display: none; } }
+
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 7rem 1.75rem 5rem;
+      position: relative;
+    }
+    .hero-glow {
+      position: absolute;
+      top: 42%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(ellipse, rgba(109,40,217,0.17) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero > *:not(.hero-glow) { position: relative; z-index: 1; }
+
+    .hero-icon {
+      width: 52px;
+      height: 52px;
+      margin-bottom: 2rem;
+      fill: var(--glow);
+      filter: drop-shadow(0 0 16px rgba(167,139,250,0.6));
+    }
+
+    .hero-eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.3em;
+      color: var(--glow);
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+    .hero h1 { margin-bottom: 0.35rem; }
+    .hero-tagline {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-size: clamp(1rem, 2.5vw, 1.35rem);
+      color: var(--glow);
+      opacity: 0.85;
+      margin-bottom: 2.75rem;
+    }
+
+    .spell-preview {
+      font-family: var(--ff-mono);
+      font-size: 0.82rem;
+      background: rgba(109,40,217,0.09);
+      border: 1px solid rgba(109,40,217,0.28);
+      border-radius: 8px;
+      padding: 1.1rem 1.5rem;
+      margin-bottom: 2.75rem;
+      max-width: 460px;
+      width: 100%;
+      text-align: left;
+      position: relative;
+    }
+    .spell-preview-label {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.85rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      color: var(--glow);
+      opacity: 0.6;
+      text-transform: uppercase;
+    }
+    .spell-before { color: var(--muted); display: block; margin-bottom: 0.6rem; }
+    .spell-arrow {
+      color: var(--arcane);
+      font-size: 1.1rem;
+      display: block;
+      margin-bottom: 0.6rem;
+      animation: arcane-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes arcane-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; text-shadow: 0 0 10px var(--arcane); }
+    }
+    .spell-after { color: var(--moonpaper); display: block; animation: shimmer-in 0.8s ease forwards; }
+    @keyframes shimmer-in {
+      from { opacity: 0; filter: blur(6px); }
+      to   { opacity: 1; filter: blur(0); }
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: var(--amber);
+      color: #08060F;
+      font-family: var(--ff-mono);
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      padding: 0.8rem 1.85rem;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary:hover { background: var(--amber-bright); box-shadow: 0 0 22px rgba(196,124,28,0.4); }
+    .btn-ghost {
+      color: var(--glow);
+      font-family: var(--ff-mono);
+      font-size: 0.8rem;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(167,139,250,0.3);
+      padding-bottom: 1px;
+      margin-left: 1.25rem;
+      transition: border-color 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--glow); }
+
+    .sigil {
+      text-align: center;
+      color: rgba(109,40,217,0.32);
+      letter-spacing: 1.2rem;
+      font-size: 0.9rem;
+      padding: 1rem 0;
+      user-select: none;
+    }
+
+    section { padding: 5.5rem 0; }
+    .section-eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.22em;
+      color: var(--glow);
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 0.65rem;
+    }
+    .section-title { margin-bottom: 2.75rem; }
+
+    .features { background: var(--deep); }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    @media (max-width: 680px) { .features-grid { grid-template-columns: 1fr; } }
+    .feature-card {
+      border: 1px solid rgba(109,40,217,0.18);
+      border-radius: 8px;
+      padding: 1.75rem;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .feature-card:hover { border-color: rgba(109,40,217,0.42); background: rgba(109,40,217,0.06); }
+    .feature-glyph { font-size: 1.75rem; display: block; margin-bottom: 1rem; }
+    .feature-card h3 { margin-bottom: 0.6rem; }
+    .feature-card p { color: var(--muted); font-size: 0.9375rem; line-height: 1.65; }
+
+    .spells { background: var(--void); }
+    .spells-intro { color: var(--muted); font-style: italic; margin-bottom: 2.25rem; max-width: 480px; font-size: 0.9375rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+    thead th {
+      font-family: var(--ff-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--glow);
+      text-align: left;
+      padding: 0 1rem 0.85rem 0;
+      border-bottom: 1px solid rgba(109,40,217,0.28);
+    }
+    tbody td { padding: 0.85rem 1rem 0.85rem 0; border-bottom: 1px solid rgba(109,40,217,0.09); vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    .spell-name { color: var(--moonpaper); font-weight: 600; }
+    .spell-desc { color: var(--muted); }
+    .badge { font-family: var(--ff-mono); font-size: 0.62rem; letter-spacing: 0.1em; padding: 0.2rem 0.55rem; border-radius: 3px; white-space: nowrap; }
+    .badge-ai { background: rgba(109,40,217,0.18); color: var(--glow); border: 1px solid rgba(109,40,217,0.35); }
+    .badge-local { background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,0.08); }
+
+    .install { background: var(--deep); }
+    .install-list { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 0.5rem; }
+    .install-row { display: grid; grid-template-columns: 6rem 1fr; gap: 1.25rem; align-items: center; }
+    @media (max-width: 540px) { .install-row { grid-template-columns: 1fr; gap: 0.4rem; } }
+    .step-label { font-family: var(--ff-display); font-style: italic; font-size: 0.85rem; color: var(--glow); opacity: 0.75; text-align: right; }
+    @media (max-width: 540px) { .step-label { text-align: left; } }
+    .code-line {
+      background: rgba(8,6,15,0.7);
+      border: 1px solid rgba(109,40,217,0.2);
+      border-radius: 5px;
+      padding: 0.75rem 1.1rem;
+      font-family: var(--ff-mono);
+      font-size: 0.82rem;
+      color: var(--moonpaper);
+      overflow-x: auto;
+    }
+    .code-line .prompt { color: var(--arcane); user-select: none; }
+    .install-note { margin-top: 2.25rem; font-size: 0.875rem; color: var(--muted); font-style: italic; line-height: 1.65; }
+    .install-note strong { color: var(--moonpaper); font-style: normal; }
+
+    footer {
+      background: var(--void);
+      border-top: 1px solid rgba(109,40,217,0.12);
+      padding: 3.25rem 2rem;
+      text-align: center;
+    }
+    .footer-brand { font-family: var(--ff-display); font-size: 1.35rem; color: var(--glow); display: block; margin-bottom: 1.25rem; }
+    footer ul { list-style: none; display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    footer ul a { color: var(--muted); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+    footer ul a:hover { color: var(--moonpaper); }
+    .footer-legal { font-family: var(--ff-mono); font-size: 0.72rem; color: rgba(124,110,154,0.45); }
+
+    :focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-brand">Grimoire</a>
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#spells">Spells</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="https://github.com/Manuel-Espinosa/grimoire" target="_blank" rel="noopener">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+
+  <svg class="hero-icon" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path fill-rule="evenodd" d="M4 2 H12 Q13 2 13 3 V13 Q13 14 12 14 H4 Q3 14 3 13 V3 Q3 2 4 2 Z M4.3 3.4 H4.9 V12.6 H4.3 Z M8.7 4.9 L9.4 7.3 L11.8 8 L9.4 8.7 L8.7 11.1 L8 8.7 L5.6 8 L8 7.3 Z"/>
+  </svg>
+
+  <p class="hero-eyebrow">GNOME Shell Extension</p>
+  <h1>Grimoire</h1>
+  <p class="hero-tagline">Cast spells on your clipboard.<br>Ask Aldric anything.</p>
+
+  <div class="spell-preview" aria-label="Spellcheck spell example">
+    <span class="spell-preview-label">✦ spell cast</span>
+    <span class="spell-before">"thsi text has bad grammer and speeling"</span>
+    <span class="spell-arrow">✦</span>
+    <span class="spell-after">"This text has bad grammar and spelling."</span>
+  </div>
+
+  <div>
+    <a href="#install" class="btn-primary">Install the extension</a>
+    <a href="https://github.com/Manuel-Espinosa/grimoire" class="btn-ghost" target="_blank" rel="noopener">View on GitHub</a>
+  </div>
+</section>
+
+<div class="sigil" aria-hidden="true">✦ &nbsp; ✦ &nbsp; ✦</div>
+
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="section-eyebrow">What it does</span>
+      <h2 class="section-title">Three arts, one extension</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <span class="feature-glyph">📋</span>
+        <h3>Clipboard History</h3>
+        <p>Every text you copy, kept. Search, pin, tag, edit, and export items. Survives screen lock, Shell restarts, and logouts.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-glyph">🪄</span>
+        <h3>Spells</h3>
+        <p>Select a clipboard item, cast a spell, get the transformed result as a new entry. The original is never touched.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-glyph">🧙</span>
+        <h3>Aldric</h3>
+        <p>A persistent floating chat. Streaming replies, multiple conversations saved to disk. Runs entirely on your machine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="sigil" aria-hidden="true">✦ &nbsp; ✦ &nbsp; ✦</div>
+
+<section class="spells" id="spells">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="section-eyebrow">The spellbook</span>
+      <h2 class="section-title">Every spell in the grimoire</h2>
+      <p class="spells-intro">AI spells require a Provider configured (Ollama). All others run locally — no model needed.</p>
+    </div>
+    <div class="reveal">
+      <table>
+        <thead>
+          <tr>
+            <th>Spell</th>
+            <th>What it does</th>
+            <th>Requires AI</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="spell-name">✏️ Format JSON</td>
+            <td class="spell-desc">Pretty-prints minified JSON</td>
+            <td><span class="badge badge-local">Local</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">🔄 JSON ⇄ YAML</td>
+            <td class="spell-desc">Converts between formats, auto-detecting direction</td>
+            <td><span class="badge badge-local">Local</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">📝 Spellcheck</td>
+            <td class="spell-desc">Fixes spelling, grammar, and punctuation</td>
+            <td><span class="badge badge-ai">✦ AI</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">📖 Summarize</td>
+            <td class="spell-desc">Condenses text into its key points</td>
+            <td><span class="badge badge-ai">✦ AI</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">🌐 Quick Translation</td>
+            <td class="spell-desc">Translates between your two configured languages, auto-detecting which is which</td>
+            <td><span class="badge badge-ai">✦ AI</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">🎭 Change tone</td>
+            <td class="spell-desc">Rewrites text as more formal or more casual</td>
+            <td><span class="badge badge-ai">✦ AI</span></td>
+          </tr>
+          <tr>
+            <td class="spell-name">🔍 Generate regex</td>
+            <td class="spell-desc">Turns a natural-language description into a regex pattern</td>
+            <td><span class="badge badge-ai">✦ AI</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="sigil" aria-hidden="true">✦ &nbsp; ✦ &nbsp; ✦</div>
+
+<section class="install" id="install">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="section-eyebrow">Getting started</span>
+      <h2 class="section-title">Install in three steps</h2>
+    </div>
+    <div class="install-list">
+      <div class="install-row reveal">
+        <span class="step-label">i. fetch</span>
+        <div class="code-line"><span class="prompt">$ </span>npm install</div>
+      </div>
+      <div class="install-row reveal">
+        <span class="step-label">ii. build</span>
+        <div class="code-line"><span class="prompt">$ </span>npm run install-extension</div>
+      </div>
+      <div class="install-row reveal">
+        <span class="step-label">iii. enable</span>
+        <div class="code-line"><span class="prompt">$ </span>gnome-extensions enable grimoire@iammanu.dev</div>
+      </div>
+    </div>
+    <p class="install-note reveal">
+      After enabling, reload GNOME Shell — Xorg: <code>Alt+F2 → r</code>; Wayland: log out and back in.<br>
+      Open <strong>Settings</strong> from the popup to configure your Ollama host and pick a model.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <span class="footer-brand">Grimoire</span>
+  <ul>
+    <li><a href="https://github.com/Manuel-Espinosa/grimoire" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="https://github.com/Manuel-Espinosa/grimoire/blob/main/LICENSE" target="_blank" rel="noopener">GPL v3</a></li>
+    <li><a href="https://buymeacoffee.com/manuespinosa" target="_blank" rel="noopener">☕ Buy me a coffee</a></li>
+  </ul>
+  <p class="footer-legal">Released under the GNU General Public License v3.0</p>
+</footer>
+
+<script>
+  const io = new IntersectionObserver(
+    es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } }),
+    { threshold: 0.1 }
+  );
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  const spellAfter = document.querySelector('.spell-after');
+  if (spellAfter) {
+    new IntersectionObserver(es => {
+      if (es[0].isIntersecting) {
+        spellAfter.style.animation = 'none';
+        void spellAfter.offsetWidth;
+        spellAfter.style.animation = 'shimmer-in 0.8s ease forwards';
+      }
+    }, { threshold: 0.5 }).observe(spellAfter);
+  }
+</script>
+</body>
+</html>

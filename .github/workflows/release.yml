@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'schemas/**'
+      - 'metadata.json'
+      - 'package.json'
+      - 'esbuild.config.js'
+      - 'tsconfig.json'
   workflow_dispatch:
 
 jobs:
