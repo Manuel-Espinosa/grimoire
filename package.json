@@ -1,0 +1,23 @@
+{
+  "name": "grimoire",
+  "version": "1.0.0",
+  "description": "GNOME Shell extension: clipboard history + AI spells (Ollama) + chat with Aldric",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "typecheck": "tsc --noEmit",
+    "install-extension": "node esbuild.config.js && rm -rf \"$HOME/.local/share/gnome-shell/extensions/grimoire@iammanu.dev\" && cp -r dist \"$HOME/.local/share/gnome-shell/extensions/grimoire@iammanu.dev\"",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@girs/gnome-shell": "*",
+    "@girs/soup-3.0": "^3.6.6-4.0.4",
+    "@types/js-yaml": "^4.0.9",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

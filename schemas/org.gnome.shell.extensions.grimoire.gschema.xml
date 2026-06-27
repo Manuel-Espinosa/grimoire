@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.grimoire"
+          path="/org/gnome/shell/extensions/grimoire/">
+
+    <key name="ollama-host" type="s">
+      <default>'http://localhost:11434'</default>
+      <summary>Ollama host endpoint</summary>
+      <description>Base URL of the Ollama server. May point at a dedicated LAN AI box, e.g. http://192.168.1.10:11434</description>
+    </key>
+
+    <key name="default-model" type="s">
+      <default>''</default>
+      <summary>Default Ollama model</summary>
+      <description>Model used by AI spells and the chat. Empty until the user picks one from the configured host.</description>
+    </key>
+
+    <key name="max-history-items" type="i">
+      <default>20</default>
+      <range min="1" max="500"/>
+      <summary>Maximum clipboard history items</summary>
+      <description>How many clipboard entries to keep.</description>
+    </key>
+
+    <key name="translate-primary-language" type="s">
+      <default>'Spanish'</default>
+      <summary>Quick Translation primary language</summary>
+      <description>The user's primary language. Quick Translation translates into this language when the input is in neither pair language.</description>
+    </key>
+
+    <key name="translate-secondary-language" type="s">
+      <default>'English'</default>
+      <summary>Quick Translation secondary language</summary>
+      <description>The other half of the Quick Translation language pair. Translation is bidirectional between the primary and secondary languages.</description>
+    </key>
+
+    <key name="chat-x" type="i">
+      <default>-1</default>
+      <summary>Chat window X position</summary>
+      <description>Saved horizontal position of the chat window. -1 means centered (first open).</description>
+    </key>
+
+    <key name="chat-y" type="i">
+      <default>-1</default>
+      <summary>Chat window Y position</summary>
+      <description>Saved vertical position of the chat window. -1 means centered (first open).</description>
+    </key>
+
+    <key name="chat-width" type="i">
+      <default>760</default>
+      <summary>Chat window width</summary>
+      <description>Saved width of the chat window, in pixels.</description>
+    </key>
+
+    <key name="chat-height" type="i">
+      <default>520</default>
+      <summary>Chat window height</summary>
+      <description>Saved height of the chat window, in pixels.</description>
+    </key>
+
+  </schema>
+</schemalist>

@@ -1,0 +1,9 @@
+{
+  "uuid": "grimoire@iammanu.dev",
+  "name": "Grimoire",
+  "description": "Clipboard history + AI spells (Ollama) + chat with Aldric. AI is optional: the clipboard manager and non-AI spells work without any provider configured.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.grimoire",
+  "url": "",
+  "version": 1
+}
