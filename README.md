@@ -69,3 +69,8 @@ Open **Settings** from the popup to set your Ollama host (e.g. `http://localhost
 journalctl --user -f -o cat _COMM=gnome-shell   # extension logs
 journalctl --user -f -o cat _COMM=gjs           # prefs logs
 ```
+---
+
+## 📜 License
+
+[GNU General Public License v3.0](./LICENSE)
