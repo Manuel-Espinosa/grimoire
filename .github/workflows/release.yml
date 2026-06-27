@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libglib2.0-bin
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Read version from metadata
+        id: meta
+        run: echo "version=$(jq -r .version metadata.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Package zip
+        run: cd dist && zip -r "../grimoire@iammanu.dev.zip" .
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.meta.outputs.version }}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "Grimoire $TAG" \
+            --notes "Built from main — install by downloading the zip and running: gnome-extensions install grimoire@iammanu.dev.zip" \
+            --latest \
+            "grimoire@iammanu.dev.zip"
