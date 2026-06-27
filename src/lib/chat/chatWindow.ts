@@ -57,10 +57,10 @@ export class ChatWindow {
     private visible = false;
 
     private grab: GrabState | null = null;
-    private stageMotionId = 0;
-    private stageReleaseId = 0;
+    private clutterGrab: Clutter.Grab | null = null;
+    private capturedEventId = 0;
     private narrow = false;
-    private overlayOpen = false;
+    private sidebarOpen = true;
     private w = DEFAULT_W;
     private h = DEFAULT_H;
 
@@ -80,8 +80,7 @@ export class ChatWindow {
         this.header = this.buildHeader();
         this.root.add_child(this.header);
 
-        // Body region: chat fills it; the sidebar overlays the left edge, the
-        // grip overlays the bottom-right corner (BinLayout stacks children).
+        // Body region: chat fills it; the sidebar overlays the left edge.
         const stack = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
@@ -145,19 +144,23 @@ export class ChatWindow {
         setScrollChild(this.sidebar, this.sidebarBox);
         stack.add_child(this.sidebar);
 
-        // Resize grip, bottom-right.
+        this.wireDrag();
+
+        Main.layoutManager.uiGroup.add_child(this.root);
+
+        // Resize grip lives directly in uiGroup (same layer as root) so no
+        // parent layout manager can shrink it to 0×0. Position is kept in sync
+        // manually via updateGripPosition().
         this.grip = new St.Widget({
             style_class: 'grimoire-chat-grip',
             reactive: true,
-            x_align: Clutter.ActorAlign.END,
-            y_align: Clutter.ActorAlign.END,
+            visible: false,
         });
-        stack.add_child(this.grip);
+        this.grip.set_size(24, 24);
+        this.grip.set_cursor_type(Clutter.CursorType.SE_RESIZE);
+        Main.layoutManager.uiGroup.add_child(this.grip);
 
-        this.wireDrag();
         this.wireResize();
-
-        Main.layoutManager.uiGroup.add_child(this.root);
 
         this.unsub = this.store.onChanged(() => this.renderSidebar());
     }
@@ -169,9 +172,8 @@ export class ChatWindow {
             reactive: true,
         });
         this.hamburger = new St.Button({ label: '☰', style_class: 'button grimoire-btn' });
-        this.hamburger.visible = false;
         this.hamburger.connect('clicked', () => this.toggleSidebar());
-        this.title = new St.Label({ text: 'Aldric', x_expand: true, style_class: 'grimoire-chat-title' });
+        this.title = new St.Label({ text: 'Aldric', x_expand: true, style_class: 'grimoire-chat-title', reactive: true });
         const newBtn = new St.Button({ label: '+ New', style_class: 'button grimoire-btn' });
         newBtn.connect('clicked', () => this.newConversation());
         const closeBtn = new St.Button({ label: '✕', style_class: 'button grimoire-btn' });
@@ -186,32 +188,40 @@ export class ChatWindow {
     // --- drag & resize ----------------------------------------------------
 
     private wireDrag(): void {
-        this.header.connect('button-press-event', (_a, ev: Clutter.Event) => {
-            // Only drag from the header background / title — not its buttons.
-            const src = ev.get_source();
-            if (src !== this.header && src !== this.title) return Clutter.EVENT_PROPAGATE;
+        this.title.connect('button-press-event', (_a, ev: Clutter.Event) => {
+            log(`[grimoire] title button-press`);
             const [cx, cy] = ev.get_coords();
             return this.beginGrab('drag', cx, cy, this.root.get_x(), this.root.get_y());
         });
     }
 
     private wireResize(): void {
+        this.grip.connect('enter-event', () => {
+            log(`[grimoire] grip enter`);
+            return Clutter.EVENT_PROPAGATE;
+        });
         this.grip.connect('button-press-event', (_a, ev: Clutter.Event) => {
+            log(`[grimoire] grip button-press`);
             const [cx, cy] = ev.get_coords();
             return this.beginGrab('resize', cx, cy, this.w, this.h);
         });
     }
 
     private beginGrab(kind: GrabKind, px: number, py: number, ox: number, oy: number): boolean {
+        log(`[grimoire] beginGrab kind=${kind} px=${px} py=${py}`);
         this.grab = { kind, px, py, ox, oy };
-        // Connect to the global stage so motion/release are captured even when
-        // the cursor leaves the header or grip area during a fast drag.
-        this.stageMotionId = global.stage.connect('motion-event', (_a: Clutter.Actor, ev: Clutter.Event) => {
-            if (this.grab?.kind === 'drag') return this.onDragMotion(ev);
-            if (this.grab?.kind === 'resize') return this.onResizeMotion(ev);
+        this.clutterGrab = global.stage.grab(this.root);
+        log(`[grimoire] clutter grab established`);
+        this.capturedEventId = this.root.connect('captured-event', (_a: Clutter.Actor, ev: Clutter.Event) => {
+            const t = ev.type();
+            if (t === Clutter.EventType.MOTION) {
+                if (this.grab?.kind === 'drag') return this.onDragMotion(ev);
+                if (this.grab?.kind === 'resize') return this.onResizeMotion(ev);
+            } else if (t === Clutter.EventType.BUTTON_RELEASE) {
+                return this.endGrab();
+            }
             return Clutter.EVENT_PROPAGATE;
         });
-        this.stageReleaseId = global.stage.connect('button-release-event', () => this.endGrab());
         return Clutter.EVENT_STOP;
     }
 
@@ -222,6 +232,7 @@ export class ChatWindow {
             Math.round(this.grab.ox + (cx - this.grab.px)),
             Math.round(this.grab.oy + (cy - this.grab.py)),
         );
+        this.updateGripPosition();
         return Clutter.EVENT_STOP;
     }
 
@@ -232,15 +243,17 @@ export class ChatWindow {
         this.w = clamp(Math.round(this.grab.ox + (cx - this.grab.px)), MIN_W, mon ? mon.width : 4000);
         this.h = clamp(Math.round(this.grab.oy + (cy - this.grab.py)), MIN_H, mon ? mon.height : 4000);
         this.root.set_size(this.w, this.h);
+        this.updateGripPosition();
         this.applyResponsive();
         return Clutter.EVENT_STOP;
     }
 
     private endGrab(): boolean {
+        log(`[grimoire] endGrab`);
         if (!this.grab) return Clutter.EVENT_PROPAGATE;
         this.grab = null;
-        if (this.stageMotionId) { global.stage.disconnect(this.stageMotionId); this.stageMotionId = 0; }
-        if (this.stageReleaseId) { global.stage.disconnect(this.stageReleaseId); this.stageReleaseId = 0; }
+        if (this.capturedEventId) { this.root.disconnect(this.capturedEventId); this.capturedEventId = 0; }
+        if (this.clutterGrab) { this.clutterGrab.dismiss(); this.clutterGrab = null; }
         this.saveGeometry();
         return Clutter.EVENT_STOP;
     }
@@ -265,32 +278,41 @@ export class ChatWindow {
             y = clamp(y, mon.y, mon.y + mon.height - this.h);
         }
         this.root.set_position(x, y);
+        this.updateGripPosition();
         this.applyResponsive();
+    }
+
+    private updateGripPosition(): void {
+        this.grip.set_position(
+            Math.round(this.root.get_x() + this.w - 24),
+            Math.round(this.root.get_y() + this.h - 24),
+        );
     }
 
     private applyResponsive(): void {
         this.narrow = this.w < NARROW_THRESHOLD;
-        this.hamburger.visible = this.narrow;
-        if (this.narrow) {
-            this.chatArea.remove_style_class_name('grimoire-chat-docked');
-            this.sidebar.visible = this.overlayOpen;
-        } else {
-            this.chatArea.add_style_class_name('grimoire-chat-docked');
+        if (this.sidebarOpen) {
             this.sidebar.visible = true;
-            this.overlayOpen = false;
+            this.chatArea.add_style_class_name('grimoire-chat-docked');
+        } else {
+            this.sidebar.visible = false;
+            this.chatArea.remove_style_class_name('grimoire-chat-docked');
+        }
+        // In narrow mode the sidebar overlays the chat rather than pushing it.
+        if (this.narrow && this.sidebarOpen) {
+            this.chatArea.remove_style_class_name('grimoire-chat-docked');
         }
     }
 
     private toggleSidebar(): void {
-        if (!this.narrow) return;
-        this.overlayOpen = !this.overlayOpen;
-        this.sidebar.visible = this.overlayOpen;
+        this.sidebarOpen = !this.sidebarOpen;
+        this.applyResponsive();
     }
 
     private closeOverlay(): void {
-        if (this.narrow && this.overlayOpen) {
-            this.overlayOpen = false;
-            this.sidebar.visible = false;
+        if (this.narrow && this.sidebarOpen) {
+            this.sidebarOpen = false;
+            this.applyResponsive();
         }
     }
 
@@ -317,12 +339,14 @@ export class ChatWindow {
         this.renderSidebar();
         this.applyGeometry();
         this.root.show();
+        this.grip.show();
         this.visible = true;
         this.entry.grab_key_focus();
     }
 
     hide(): void {
         this.root.hide();
+        this.grip.hide();
         this.visible = false;
     }
 
@@ -393,6 +417,7 @@ export class ChatWindow {
         });
         label.clutter_text.line_wrap = true;
         label.clutter_text.line_wrap_mode = 2; // PangoWrapMode.WORD_CHAR
+        label.clutter_text.ellipsize = 0;      // PangoEllipsizeMode.NONE
         wrap.add_child(label);
         this.messagesBox.add_child(wrap);
         return label;
@@ -466,9 +491,10 @@ export class ChatWindow {
 
     destroy(): void {
         this.stream?.cancel();
-        if (this.stageMotionId) { global.stage.disconnect(this.stageMotionId); this.stageMotionId = 0; }
-        if (this.stageReleaseId) { global.stage.disconnect(this.stageReleaseId); this.stageReleaseId = 0; }
+        if (this.capturedEventId) { this.root.disconnect(this.capturedEventId); this.capturedEventId = 0; }
+        if (this.clutterGrab) { this.clutterGrab.dismiss(); this.clutterGrab = null; }
         this.unsub();
+        this.grip.destroy();
         this.root.destroy();
     }
 }
